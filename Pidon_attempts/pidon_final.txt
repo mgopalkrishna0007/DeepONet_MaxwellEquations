@@ -1,0 +1,301 @@
+1. Overall Model Structure (Top-Level)
+
+Your model must be organized explicitly into three conceptual modules:
+
+Branch Encoder (U-Net Downsampling – field E)
+
+Trunk Encoder (U-Net Downsampling – coordinates Δx, Δy, Δz)
+
+Decoder (Shared U-Net Upsampling)
+
+❗ Keep these as clearly separated classes or blocks.
+Mixing logic is what caused ambiguity and shape errors earlier.
+
+2. Inputs (Strictly per Theory)
+
+Each dataset sample contains:
+
+Input tensors
+
+Field input (branch)
+Shape:
+
+E ∈ ℝ^{B × 3 × 32 × 32 × 32}
+
+
+where channels = (Ex, Ey, Ez)
+
+Coordinate input (trunk)
+Shape:
+
+C ∈ ℝ^{B × 3 × 32 × 32 × 32}
+
+
+where channels = (Δx, Δy, Δz)
+
+✅ This matches:
+“Each input dataset included two 3-D vectors representing the coordinates and the corresponding E.”
+
+3. Convolutional Block (Used Everywhere)
+
+Each block must be identical across branch, trunk, and decoder.
+
+Block definition (mandatory):
+
+Conv3D (3×3×3, stride=1, padding=1)
+
+GELU
+
+Conv3D (3×3×3, stride=1, padding=1)
+
+GELU
+
+Residual connection:
+
+y = conv2(GELU(conv1(x))) + x
+
+
+✅ Preserves spatial size
+✅ Maintains gradient flow
+✅ Matches paper exactly
+
+4. Downsampling (Branch & Trunk — Identical Depth)
+
+For L levels (e.g., L = 4):
+
+At each level ℓ:
+
+Residual Conv Block
+
+Save output for:
+
+Branch → skip connection
+
+Trunk → Hadamard product later
+
+MaxPool3D(kernel=2, stride=2)
+
+Important invariants:
+
+Branch and trunk must have the same L
+
+Spatial sizes must match at each level:
+
+32³ → 16³ → 8³ → 4³
+
+5. Bottleneck (Lowest Resolution)
+
+At resolution 4×4×4:
+
+One residual Conv3D block
+
+Applied only to branch features
+
+6. Hadamard Product (DeepONet Core)
+
+
+5. What You Should Change in Code (Concrete Guidance)
+✅ DO
+
+Apply Hadamard product only once
+
+Apply it before the first upsampling
+
+Ensure:
+
+assert branch_b.shape == trunk_b.shape
+
+
+7. Upsampling Path (Decoder)
+
+For each level ℓ from bottom → top:
+
+Input: Hadamard-combined feature Fℓ
+
+Transposed Conv3D (2×2×2, stride=2)
+
+Skip connection from branch encoder only
+
+Uℓ = concat(Uℓ, Branchℓ_skip)
+
+
+Residual Conv Block
+
+❗ Trunk is NOT used in skip connections
+❗ Trunk affects decoder only through Hadamard product
+
+8. Output Layer
+
+Final Conv3D:
+
+Conv3D(in_channels, out_channels=3, kernel=1)
+
+
+Output:
+
+∇ × E ∈ ℝ^{B × 3 × 32 × 32 × 32}
+
+9. Normalization (Post-Processing)
+
+Per theory:
+
+“The U-net output, ∇ × E, was normalized by the local maximum for each component”
+
+So after prediction:
+
+curl̂_c = curl̂_c / max(|curl̂_c|)
+
+
+for each component c ∈ {x, y, z} per sample
+
+PART B — DATASET & TRAINING PIPELINE (CROSS-CHECKED)
+Dataset generation (correct as stated)
+
+Superposition of n = 20 plane waves
+
+Computational grid: 32×32×32
+
+Cell size:
+
+Δx, Δy, Δz ∈ [0.3, 0.8] mm
+
+
+Angles:
+
+φ ∈ [-π, π]
+θ ∈ [0, π]
+
+
+k values:
+
+k ∈ [0, 1048] → 0–50 GHz
+
+
+Field constraint:
+
+k · E0 = 0
+Ez = −(cosφ sinθ Ex + sinφ sinθ Ey) / cosθ
+
+
+✅ Physics-consistent
+✅ Curl is analytically computable
+
+Training
+
+Dataset size: 1000
+
+Train/Test split: 80/20
+
+Optimizer: Adam
+
+LR = 1e-4
+
+Epochs = 1000
+
+Batch size = 32
+
+Metrics
+
+Training & testing MSE
+
+MRE exactly as defined (piecewise denominator handling)
+
+PART C — ERROR ANALYSIS: WHAT CAUSED THE ISSUE & FIXES (BULLETS ONLY)
+❌ Issue 1 — Channel mismatch after skip concatenation
+
+Cause:
+
+Decoder blocks were initialized assuming fixed channel counts
+
+Skip concatenation doubles channels, but block input channels weren’t updated
+
+Fix:
+
+Explicitly compute:
+
+in_channels = up_channels + skip_channels
+
+
+Adjust decoder Conv3D blocks accordingly
+
+❌ Issue 2 — Trunk treated like a skip tensor
+
+Cause:
+
+Trunk features were passed into upsampling blocks directly
+
+Conceptually incorrect: trunk ≠ skip
+
+Fix:
+
+Trunk participates only in Hadamard product
+
+Remove trunk from decoder block arguments
+
+❌ Issue 3 — Implicit assumption of spatial alignment
+
+Cause:
+
+No explicit assertion checks before Hadamard product
+
+Fix:
+Add runtime checks:
+
+assert branch.shape == trunk.shape
+
+
+at every Hadamard site
+
+❌ Issue 4 — Architectural entanglement
+
+Cause:
+
+Branch, trunk, and decoder logic interleaved in forward pass
+
+Fix:
+
+Refactor into:
+
+encode_branch()
+
+encode_trunk()
+
+decode()
+
+This prevents silent shape errors.
+
+❌ Issue 5 — Missing explicit normalization
+
+Cause:
+
+Output normalization omitted or applied globally
+
+Fix:
+
+Normalize per-component, per-sample after inference
+
+PART D — INFERENCE & PLOTTING (WHAT TO SHOW)
+
+For test case:
+
+Δx = Δy = Δz = 0.6 mm
+
+θ = 45°
+
+φ = 60°
+
+k: 20 values ∈ [0.021, 838.34]
+
+Plots required:
+
+Input E(x,y,z) — x, y, z slices
+
+Analytical curl — x, y, z
+
+Predicted curl — x, y, z
+
+Difference heatmaps (|pred − true|)
+
+MRE heatmap
+
+Colorbars + axis labels + units
