@@ -4,14 +4,14 @@ the code needs a lot of corrections.
 
 architecture 
 
-We extended the U-net framework by incorporating 3-D convolutional kernels to solve 3-D problems.
-extra downsampling branch as the trunk network to process coordinate information.
-As a DCO, this trunk network decodes coordinate information into cell sizes, allowing its application across different computational domains.
+U-net framework should have 3-D convolutional kernels to solve 3-D problems.
+extra downsampling branch as the trunk network to process coordinate information, trunk decodes coordinate information into cell sizes, allowing its application across different computational domains.
+(input to trunk here is not cooridnates but spacing info , which is discretization of cells basically)
+
 The U-net architecture: a downsampling branch and an upsampling branch. 
-Each branch contains L levels of corresponding blocks. In each block, there are two
-3×3×3 convolution filters with an activation function.
-we use Gaussian error linear units.
- The padding size of these two convolutional layers is 1 on each boundary, and the step size
+Each branch - L levels of corresponding blocks, each block, there are two
+3×3×3 convolution filters with an activation function. we use Gaussian error linear units.
+ padding size of these two convolutional layers is 1 on each boundary, the step size
 of convolutional kernels is also 1, ensuring that the output
 dimensions remain unchanged after each block. We add an
 additional residual connection within each block to maintain
