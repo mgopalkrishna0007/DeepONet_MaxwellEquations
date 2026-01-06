@@ -1,17 +1,15 @@
 make this code well structured first , very well strcutred and kept together
 cross check the code witht he theory and process below as well and make necessary changes.
+the code needs a lot of corrections.
 
 architecture 
 
-The DCO is implemented using a modified U-net architecture
-We extended the U-net framework by incorporating 3-D convolutional kernels to solve 3-D problems. We also added an
-extra downsampling branch to function as the trunk network in
-the DeepONet, allowing it to process coordinate information.
-As a DCO, this trunk network decodes coordinate information into cell sizes, allowing its application across different
-computational domains.
-The U-net architecture comprises two branches: a downsampling branch and an upsampling branch. Each branch contains
-L levels of corresponding blocks. In each block, there are two
-3×3 × 3 convolution filters with an activation function.
+We extended the U-net framework by incorporating 3-D convolutional kernels to solve 3-D problems.
+extra downsampling branch as the trunk network to process coordinate information.
+As a DCO, this trunk network decodes coordinate information into cell sizes, allowing its application across different computational domains.
+The U-net architecture: a downsampling branch and an upsampling branch. 
+Each branch contains L levels of corresponding blocks. In each block, there are two
+3×3×3 convolution filters with an activation function.
 we use Gaussian error linear units.
  The padding size of these two convolutional layers is 1 on each boundary, and the step size
 of convolutional kernels is also 1, ensuring that the output
@@ -21,60 +19,56 @@ the gradient flow from the input feature map to the second
 convolution layer. This residual connection facilitates deeper
 layers in the network to learn residual functions with reference
 to the layer inputs, In the downsampling branch, there is a max-pooling layer
-between two neighboring blocks. The kernel size of the
-max-pooling layer is 2×2 × 2, which halves the feature map
-dimensions after each downsampling block. In the upsampling
-branch, there is a transposed convolutional layer between each
-block. The kernel size of this layer is also 2×2 × 2, doubling
+between two neighboring blocks of kernel size 2×2 × 2,. upsampling
+branch is a transposed convolutional layer between each
+block of kernel size 2×2 × 2, doubling
 the size of the feature map in each dimension after each block.
 Consequently, the output dimensions remain the same as the
-input dimensions after U-net computation. The outputs of the two
+input dimensions after U-net computation. 
+
+The outputs of the two
 downsampling branches are combined using the Hadamard
-product, which performs element-wise multiplication of the
+product at the bottle neck, which performs element-wise multiplication of the
 corresponding values from the branch and trunk networks.
 This operation maintains the dimensions of the input feature
 map, ensuring alignment of the feature map shapes between
 the corresponding blocks in the downsampling and upsampling
 branches.
+
 Finally, between the downsampling branch and the upsampling branch, there is a skip connection between the
-corresponding block. skip
-connection directly copies the output from one downsampling
+corresponding block. skip connection directly copies the output from one downsampling
 branch to the corresponding block in the upsampling branch.
 This direct connection maintains multiple levels of features in
 the training process.
 
 
 each dataset , consists of multiple plane waves ( n = 20 ) superimposed and corresponding del x E is computed for reference. 
-E =
-Summation i=0 to n of E0,i exp[−jki(xcosφsinθ + ysinφsinθ + zcosθ)]
+E = Summation i=0 to n of E0,i exp[−jki(xcosφsinθ + ysinφsinθ + zcosθ)]
 32x32x32 cells computational domain discretised 
 delta x and delta y and delta z cell dimension randing from 0.3-0.8mm 
 for each dataset phi and theta randomly between -pi and +pi , 0 to pi respectively 
-after etting phi nd theta , multiple values of k between 0 and 1048 ( n values of k between 0 and 1048 ) which result in a frequency spectrum gtom 0 to fifty ghz. 
+after etting phi nd theta , multiple values of k between 0 and 1048 ( n values of k between 0 and 1048 ) which result in a frequency spectrum gtom 0 to 50 ghz. 
 amplitude of Ex and Ey are random between 0 and 5 for specific ki , and Ez is calaulted by 
 ki·E0,i = 0 and 
 Ez,i = −[cosφsinθ Ex,i + sinφsinθ Ey,i]/cosθ 
 
-80 and 20 traingn and testing loss , along with testin mse give MRE as well given by 
-
- (MRE), which is calculated using the following formula:
-MRE =
-(1/Nx Ny Nz) . summation from i,j,k=1 to NxX,Ny ,Nz of (y subscript i,j,k upscript p − y subscript i,j,k upcript t)/y subscript i,j,k upcript t  if y subscript i,j,k upscript t not equal to 0 
- otherwise y subscript i,j,k upscript p if y subscript i,j,k upscript t is equal to 0
-where y subscript i,j,k upscript t represents the analytical ground-truth data and
-y subscript i,j,k upscript p represents the predictions from the DCO.
-
 The U-net output, ∇D × E, was normalized by the local
-maximum for each component to improve prediction accuracy. 
+maximum for each component. local max in the ground truth curl ∇ × E basically
 
 A dataset of 1000 samples was generated to train with Adam optimizer over 1000 epochs, with a learning
 rate set to 10−4 and a batch size of 32
 80/20 train test
 Each input dataset included two 3-D vectors representing the
 coordinates and the corresponding E. 
+Test mse loss is basically between the normalised output (∇D × E, was normalized) and correpsoning ground truth (∇ × E) so when training starts print epoch 1 by 1 till 1000 , the correpodning train mse loss and test mse loss. after trianing is done.
+after trianing and saving pth and other things as we already do ,
+run inference based on below , 
+and calualte the MRE loss given by MRE =(1/Nx Ny Nz) . summation from i,j,k=1 to NxX,Ny ,Nz of (y subscript i,j,k upscript p − y subscript i,j,k upcript t)/y subscript i,j,k upcript t  if y subscript i,j,k upscript t not equal to 0 
+ otherwise y subscript i,j,k upscript p if y subscript i,j,k upscript t is equal to 0
+where y subscript i,j,k upscript t represents the analytical ground-truth data and
+y subscript i,j,k upscript p represents the predictions from the DCO.
 
-
-after trianing and saving pth and other things as we already do , plot the inference for test case 
+plot the inference for test case 
 delta x = deltay = deltaz = 0.6 mm, θ = 45◦
 , φ = 60◦
 , and
